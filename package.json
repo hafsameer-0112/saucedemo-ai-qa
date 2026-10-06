@@ -1,0 +1,16 @@
+{
+  "name": "saucedemo-ai-qa",
+  "version": "1.0.0",
+  "description": "AI-assisted exploratory testing, defect report evidence, and Playwright E2E for SauceDemo",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^22.10.0"
+  }
+}
