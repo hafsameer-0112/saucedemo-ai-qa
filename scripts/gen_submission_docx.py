@@ -126,7 +126,173 @@ p(
     "E2E covers the critical purchase path."
 )
 
-h("2. Task B — Defect report (top 5)")
+# ---------------------------------------------------------------------------
+# Task A — full exploratory testing section (before defects)
+# ---------------------------------------------------------------------------
+h("2. Task A — AI-Assisted Exploratory Testing")
+p(
+    "Goal: use AI to accelerate exploration of SauceDemo — not to dump a traditional test-case list. "
+    "AI proposed risks and edge cases; each idea was converted into a live check, then kept, changed, "
+    "or discarded based on what the app actually does for standard_user."
+)
+
+h("2.1 Approach", 2)
+bullet("Explore live app at https://www.saucedemo.com/ with standard_user / secret_sauce.")
+bullet("Ask AI for high-risk journeys, functional risks, edge cases, UX/a11y, performance, and follow-up questions.")
+bullet("Execute useful suggestions as real tests in the browser.")
+bullet("Challenge or discard ideas that are irrelevant, wrong, redundant, or unsupported by the app.")
+
+h("2.2 Highest-risk user journeys identified", 2)
+table(
+    ["Journey", "Why it mattered", "Session outcome"],
+    [
+        [
+            "Purchase / checkout integrity",
+            "Money, order completion, and validation sit here",
+            "Highest risk — multiple critical defects (see Task B)",
+        ],
+        [
+            "Cart state (add/remove/empty/badge)",
+            "Empty-cart checkout and no qty control change purchase semantics",
+            "High risk — empty checkout confirmed",
+        ],
+        [
+            "Dynamic Catalog (Lazy / Spinner / Slider)",
+            "Newer surface with loading, duplicates, a11y, browse-only UX",
+            "High risk — duplicate SKUs confirmed",
+        ],
+        [
+            "Auth + session guards",
+            "Protects all post-login pages",
+            "Medium — mostly passed (guards + locked_out_user)",
+        ],
+        [
+            "Catalog browse + sort",
+            "Core discovery path",
+            "Lower risk — sort/tax healthy for standard_user",
+        ],
+    ],
+)
+
+h("2.3 What was actually tested (live)", 2)
+bullet("Login: empty submit, username-only, password-only, locked_out_user.")
+bullet("Inventory: price sort low→high and high→low; add/remove; cart badge.")
+bullet("Cart: quantity editability, localStorage cart model, empty-cart checkout.")
+bullet("Checkout: whitespace-only names/zip, invalid zip (!!!), tax math, Finish, Back then re-Finish.")
+bullet("Order complete: thank-you page; Generate PDF order button state.")
+bullet("Auth guards: logout then direct URL to /inventory.html and /checkout-step-one.html.")
+bullet("Dynamic Catalog: Lazy Load scroll/duplicates, Spinner page, Slider dots/a11y.")
+
+h("2.4 Exploration outcomes (summary)", 2)
+p("Confirmed bugs (detail + evidence in Task B):", bold=True, after=2)
+bullet("Empty cart can complete a $0 order.")
+bullet("Whitespace-only First/Last/Zip accepted.")
+bullet("Postal code accepts “!!!” with no format check.")
+bullet("Browser Back after Thank You still allows Finish.")
+bullet("Lazy Load catalog duplicates Test.allTheThings() T-Shirt (Red) (L).")
+p("Confirmed passes:", bold=True, after=2)
+bullet("Tax math at 8% correct ($29.99 → tax $2.40 → total $32.39; multi-item $79.98 → $6.40 → $86.38).")
+bullet("Price sort lohi/hilo correct; cart badge increments on Add.")
+bullet("Route guards after logout; locked_out_user blocked.")
+p("Limitations (not filed as defects):", bold=True, after=2)
+bullet("Dynamic Catalog pages are browse-only (no Add to cart).")
+bullet("Cart quantity cannot exceed 1 (localStorage stores product ID array only).")
+
+h("2.5 Representative AI prompts (Task A deliverable)", 2)
+p(
+    "Five prompts used to accelerate exploration. For each: purpose, useful AI output, and what was "
+    "tested / changed / rejected / validated against the live app."
+)
+
+prompts_a = [
+    (
+        "Prompt 1 — Risk prioritization",
+        "“For SauceDemo (saucedemo.com), identify the highest-risk user journeys for standard_user. "
+        "Prioritize by business/impact risk, not by page count. Challenge assumptions that only apply "
+        "to real e-commerce backends.”",
+        "Focus the session on risk instead of generating a generic test-case list.",
+        "Ranked checkout/cart as top risk; auth/session next; warned payment may be mocked.",
+        "Validated checkout + cart as highest risk in the live app. Kept auth as medium after "
+        "logout/direct-URL checks. Rejected deep payment/fraud testing after confirming SauceCard is fake.",
+    ),
+    (
+        "Prompt 2 — Checkout edge cases",
+        "“Generate functional risks and edge cases for SauceDemo checkout (info form → overview → finish). "
+        "Include empty cart, whitespace, postal formats, back-button after complete, and tax math. "
+        "Mark which need live proof.”",
+        "Convert AI edge-case ideation into concrete checkout experiments.",
+        "Suggested empty-cart checkout, whitespace names, invalid zip, tax rounding, re-submit via Back.",
+        "Validated as bugs: empty cart $0 order, whitespace accepted, zip “!!!” accepted, Back+Finish "
+        "replay. Validated as pass: 8% tax. Tax idea confirmed correct — no change needed.",
+    ),
+    (
+        "Prompt 3 — Dynamic Catalog scout",
+        "“After login, the menu has Dynamic Catalog → Lazy Load / Spinner / Slider. What should I explore "
+        "for data integrity, loading UX, a11y, and purchase flow gaps? Discard ideas if those pages are "
+        "browse-only.”",
+        "Investigate a less obvious, higher-novelty surface with AI as a scout.",
+        "Flagged infinite-scroll duplicates, spinner leftovers, slider keyboard/a11y, missing Add to cart.",
+        "Validated duplicate Red T-Shirt (L); all slider dots a11y-current; browse-only. Treated missing "
+        "Add to cart as limitation, not defect. Keyboard ArrowLeft did not move slider — kept as open follow-up.",
+    ),
+    (
+        "Prompt 4 — Login / session risks (scoped)",
+        "“Propose login/UX and session risks for SauceDemo: empty fields, partial credentials, "
+        "locked_out_user, and direct URL access after logout. Ignore SQL injection unless the UI gives "
+        "a real reason to prioritize it.”",
+        "Cover auth without wasting time on generic security folklore.",
+        "Required-field messaging, locked-out persona, route guards, misleading error chrome.",
+        "Validated required-field errors, locked_out_user blocked, route guards. Confirmed UX issue: both "
+        "fields show red X when only one is wrong. Rejected SQL-injection deep dive as out of scope.",
+    ),
+    (
+        "Prompt 5 — Explicit discard pass",
+        "“Which of these AI ideas should I discard for SauceDemo and why: multi-currency, stock limits, "
+        "email confirmation, multi-user cart sync, real card processing? Base the answer on what the app "
+        "actually exposes.”",
+        "Force explicit rejection of AI noise before writing findings.",
+        "Discard list with rationale tied to missing UI/capabilities.",
+        "All five discarded after live observation (no locale/currency, no stock, no email at checkout, "
+        "cart is localStorage ID array, payment mocked). Prevented false findings in the report.",
+    ),
+]
+for title_t, prompt, purpose, useful, action in prompts_a:
+    h(title_t, 3)
+    p("Prompt:", bold=True, after=2)
+    p(prompt, italic=True)
+    p("Purpose: " + purpose)
+    p("Useful AI output: " + useful)
+    p("What I tested / changed / rejected / validated: " + action)
+
+h("2.6 AI suggestions discarded", 2)
+table(
+    ["Suggestion", "Why discarded"],
+    [
+        [
+            "Deep payment / fraud / card-processor tests",
+            "Payment is mocked (“SauceCard #31337”); no real processor or card form",
+        ],
+        [
+            "SQL injection / auth bypass fuzzing as primary focus",
+            "Demo credential list + cookie session-username; not worth session budget",
+        ],
+        ["i18n / multi-currency checkout", "No locale or currency switcher found"],
+        [
+            "Inventory stock / oversell limits",
+            "No stock counters or purchase limits in UI or cart model",
+        ],
+        [
+            "Multi-user cart sync / concurrency",
+            "Cart is localStorage product-ID list on the client only",
+        ],
+        [
+            "Email / order confirmation delivery",
+            "Checkout collects name + zip only; no email field",
+        ],
+    ],
+)
+
+h("3. Task B — Defect report (top 5)")
 
 # DEF-01
 h("DEF-01 — Empty cart can complete checkout ($0 order)", 2)
@@ -257,51 +423,6 @@ bullet("Dynamic Catalog has no Add to cart → feature limitation / separate sur
 bullet("Cart qty cannot exceed 1 → demo localStorage ID-array model.")
 bullet("SauceCard #31337 mock payment → intentional demo behavior.")
 bullet("problem_user / visual_user quirks → persona-specific, not primary-account defects.")
-
-h("3. Task A — AI prompt / usage log")
-prompts = [
-    (
-        "Prompt 1 — Risk prioritization",
-        "Identify highest-risk SauceDemo journeys for standard_user; challenge real-commerce assumptions.",
-        "Focus session on impact.",
-        "Checkout/cart top; payment likely mocked.",
-        "Validated checkout/cart risk. Rejected deep payment/fraud focus.",
-    ),
-    (
-        "Prompt 2 — Checkout edge cases",
-        "Generate checkout risks: empty cart, whitespace, postal format, Back after complete, tax math.",
-        "Convert ideation to experiments.",
-        "Empty cart, whitespace, !!! zip, Back+Finish, tax.",
-        "Validated DEF-01–04 as bugs; tax 8% confirmed pass.",
-    ),
-    (
-        "Prompt 3 — Dynamic Catalog",
-        "Explore Lazy/Spinner/Slider for data integrity, loading UX, a11y; discard if browse-only.",
-        "Scout newer surface.",
-        "Duplicates, a11y, missing Add to cart.",
-        "Validated DEF-05. Treated missing Add to cart as limitation.",
-    ),
-    (
-        "Prompt 4 — Auth scoped",
-        "Login/session risks; ignore SQL injection unless UI justifies it.",
-        "Cover auth without folklore.",
-        "Required fields, locked_out_user, route guards.",
-        "Validated guards + locked_out. Rejected SQL deep dive.",
-    ),
-    (
-        "Prompt 5 — Discard pass",
-        "Discard multi-currency, stock, email confirmation, multi-user cart, real cards — based on app reality.",
-        "Kill unsupported AI ideas.",
-        "Discard list with rationale.",
-        "All five discarded after live observation.",
-    ),
-]
-for title_t, prompt, purpose, useful, action in prompts:
-    h(title_t, 3)
-    p("Prompt: " + prompt, italic=True)
-    p("Purpose: " + purpose)
-    p("Useful AI output: " + useful)
-    p("Tested / changed / rejected / validated: " + action)
 
 h("4. Task C — Automated test")
 p(

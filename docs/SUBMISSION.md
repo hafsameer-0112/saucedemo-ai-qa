@@ -6,6 +6,90 @@
 
 ---
 
+## Task A — AI-Assisted Exploratory Testing
+
+**Goal:** Use AI to accelerate exploration of SauceDemo — not to dump a traditional test-case list. AI proposed risks and edge cases; each idea was converted into a live check, then kept, changed, or discarded based on what the app actually does for `standard_user`.
+
+### Approach
+
+- Explore live app at https://www.saucedemo.com/ with `standard_user` / `secret_sauce`
+- Ask AI for high-risk journeys, functional risks, edge cases, UX/a11y, performance, and follow-up questions
+- Execute useful suggestions as real tests in the browser
+- Challenge or discard ideas that are irrelevant, wrong, redundant, or unsupported by the app
+
+### Highest-risk user journeys identified
+
+| Journey | Why it mattered | Session outcome |
+|---------|-----------------|-----------------|
+| Purchase / checkout integrity | Money, order completion, and validation sit here | Highest risk — multiple critical defects (see Task B) |
+| Cart state (add/remove/empty/badge) | Empty-cart checkout and no qty control change purchase semantics | High risk — empty checkout confirmed |
+| Dynamic Catalog (Lazy / Spinner / Slider) | Newer surface with loading, duplicates, a11y, browse-only UX | High risk — duplicate SKUs confirmed |
+| Auth + session guards | Protects all post-login pages | Medium — mostly passed |
+| Catalog browse + sort | Core discovery path | Lower risk — sort/tax healthy |
+
+### What was actually tested (live)
+
+- Login: empty submit, username-only, password-only, `locked_out_user`
+- Inventory: price sort lohi/hilo; add/remove; cart badge
+- Cart: quantity editability, localStorage cart model, empty-cart checkout
+- Checkout: whitespace-only names/zip, invalid zip (`!!!`), tax math, Finish, Back then re-Finish
+- Order complete: thank-you page; Generate PDF order button state
+- Auth guards: logout then direct URL to `/inventory.html` and `/checkout-step-one.html`
+- Dynamic Catalog: Lazy Load scroll/duplicates, Spinner page, Slider dots/a11y
+
+### Exploration outcomes (summary)
+
+**Confirmed bugs** (full write-ups in Task B): empty cart $0 order; whitespace-only checkout info; zip `!!!` accepted; Back allows re-Finish; Lazy Load duplicate Red T-Shirt (L).
+
+**Confirmed passes:** tax math 8%; price sort; cart badge; route guards; `locked_out_user` blocked.
+
+**Limitations (not defects):** Dynamic Catalog browse-only; cart qty cannot exceed 1.
+
+### Representative AI prompts (Task A deliverable)
+
+#### Prompt 1 — Risk prioritization
+**Prompt:** “For SauceDemo (saucedemo.com), identify the highest-risk user journeys for standard_user. Prioritize by business/impact risk, not by page count. Challenge assumptions that only apply to real e-commerce backends.”  
+**Purpose:** Focus the session on risk instead of generating a generic test-case list.  
+**Useful AI output:** Ranked checkout/cart as top risk; auth/session next; warned payment may be mocked.  
+**What I tested / changed / rejected / validated:** Validated checkout + cart as highest risk. Kept auth as medium. Rejected deep payment/fraud testing after confirming SauceCard is fake.
+
+#### Prompt 2 — Checkout edge cases
+**Prompt:** “Generate functional risks and edge cases for SauceDemo checkout (info form → overview → finish). Include empty cart, whitespace, postal formats, back-button after complete, and tax math. Mark which need live proof.”  
+**Purpose:** Convert AI edge-case ideation into concrete checkout experiments.  
+**Useful AI output:** Empty-cart checkout, whitespace names, invalid zip, tax rounding, re-submit via Back.  
+**What I tested / changed / rejected / validated:** Validated as bugs: empty cart $0 order, whitespace accepted, zip `!!!` accepted, Back+Finish replay. Validated as pass: 8% tax.
+
+#### Prompt 3 — Dynamic Catalog scout
+**Prompt:** “After login, the menu has Dynamic Catalog → Lazy Load / Spinner / Slider. What should I explore for data integrity, loading UX, a11y, and purchase flow gaps? Discard ideas if those pages are browse-only.”  
+**Purpose:** Investigate a less obvious surface with AI as a scout.  
+**Useful AI output:** Infinite-scroll duplicates, spinner leftovers, slider keyboard/a11y, missing Add to cart.  
+**What I tested / changed / rejected / validated:** Validated duplicate Red T-Shirt (L); slider a11y-current on all dots; browse-only. Treated missing Add to cart as limitation, not defect.
+
+#### Prompt 4 — Login / session risks (scoped)
+**Prompt:** “Propose login/UX and session risks for SauceDemo: empty fields, partial credentials, locked_out_user, and direct URL access after logout. Ignore SQL injection unless the UI gives a real reason to prioritize it.”  
+**Purpose:** Cover auth without wasting time on generic security folklore.  
+**Useful AI output:** Required-field messaging, locked-out persona, route guards, misleading error chrome.  
+**What I tested / changed / rejected / validated:** Validated required-field errors, locked_out blocked, route guards. Confirmed UX issue: both fields show red X when only one is wrong. Rejected SQL-injection deep dive.
+
+#### Prompt 5 — Explicit discard pass
+**Prompt:** “Which of these AI ideas should I discard for SauceDemo and why: multi-currency, stock limits, email confirmation, multi-user cart sync, real card processing? Base the answer on what the app actually exposes.”  
+**Purpose:** Force explicit rejection of AI noise before writing findings.  
+**Useful AI output:** Discard list with rationale tied to missing UI/capabilities.  
+**What I tested / changed / rejected / validated:** All five discarded after live observation. Prevented false findings in the report.
+
+### AI suggestions discarded
+
+| Suggestion | Why discarded |
+|------------|---------------|
+| Deep payment / fraud / card-processor tests | Payment is mocked (“SauceCard #31337”) |
+| SQL injection / auth bypass as primary focus | Demo cookie session; not worth session budget |
+| i18n / multi-currency checkout | No locale or currency switcher |
+| Inventory stock / oversell limits | No stock counters in UI/cart model |
+| Multi-user cart sync / concurrency | Cart is localStorage product-ID list only |
+| Email / order confirmation delivery | No email field at checkout |
+
+---
+
 ## Task B — Defect Discovery & Reporting
 
 Quality over quantity. Findings below were reproduced on `standard_user` and classified only when impact + unexpectedness were clear for a purchase demo. Unusual demo personas (`problem_user`, etc.) were **not** treated as defects of the primary path unless they also affect `standard_user`.
@@ -81,34 +165,6 @@ Quality over quantity. Findings below were reproduced on `standard_user` and cla
 - Cart quantity cannot exceed 1 → demo cart model (`localStorage` ID array), document as limitation  
 - Mock payment “SauceCard #31337” → intentional demo behavior  
 - Broken UX on `problem_user` / `visual_user` → persona-specific, not primary-account defects  
-
----
-
-## Task A — AI Prompt / Usage Log (summary)
-
-### Prompt 1 — Risk prioritization
-**Purpose:** Focus on impact, not page count.  
-**Useful output:** Checkout/cart highest risk; payment likely mocked.  
-**Validated:** Checkout/cart confirmed highest risk. **Rejected:** deep payment fraud testing.
-
-### Prompt 2 — Checkout edge cases
-**Purpose:** Turn AI ideas into experiments.  
-**Useful output:** Empty cart, whitespace, invalid zip, Back+Finish, tax math.  
-**Validated as bugs:** DEF-01–04. **Validated as pass:** 8% tax math.
-
-### Prompt 3 — Dynamic Catalog scout
-**Purpose:** Explore Lazy/Spinner/Slider.  
-**Useful output:** Duplicates, a11y, browse-only.  
-**Validated:** DEF-05. **Limitation:** no Add to cart (not filed as defect).
-
-### Prompt 4 — Auth/session (scoped)
-**Purpose:** Cover login without SQL-injection folklore.  
-**Useful output:** Required fields, locked_out_user, route guards.  
-**Validated:** guards + locked_out work. **Rejected:** SQL injection deep dive.
-
-### Prompt 5 — Explicit discard pass
-**Purpose:** Kill unsupported AI ideas.  
-**Discarded:** multi-currency, stock, email confirmation, multi-user cart sync, real card processing.
 
 ---
 
